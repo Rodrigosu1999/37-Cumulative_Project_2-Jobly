@@ -2,7 +2,7 @@
 
 const db = require("../db");
 const { BadRequestError, NotFoundError } = require("../expressError");
-const { sqlForPartialUpdate, sqlForFilteredSearch } = require("../helpers/sql");
+const { sqlForPartialUpdate } = require("../helpers/sql");
 
 /** Related functions for companies. */
 
@@ -77,6 +77,8 @@ class Company {
 
     let querySql;
     let result;
+
+    //The SQL query changes dependig if the name was provided or not
     if (!name) {
       querySql = `
                       SELECT handle,
@@ -99,10 +101,10 @@ class Company {
     }
     
     const companies = result.rows;
-    console.log(companies);
 
     if (!companies) throw new NotFoundError(`No companies with said filters`);
 
+    //Filter to add minEmployees and max Employees to the filtered search
     const filteredCompanies = companies.filter(comp => comp.numEmployees >= minEmployees && comp.numEmployees <= maxEmployees);
 
     return filteredCompanies;
@@ -130,6 +132,17 @@ class Company {
     const company = companyRes.rows[0];
 
     if (!company) throw new NotFoundError(`No company: ${handle}`);
+
+    //Request to get jobs (in case the company has), if empty we get an empty array
+    const jobsRes = await db.query(
+      `SELECT id, title, salary, equity
+       FROM jobs
+       WHERE company_handle = $1
+       ORDER BY id`,
+    [handle],
+    );
+
+    company.jobs = jobsRes.rows;
 
     return company;
   }

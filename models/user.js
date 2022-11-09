@@ -139,6 +139,13 @@ class User {
 
     if (!user) throw new NotFoundError(`No user: ${username}`);
 
+    //Request to get applications from the user, if there aren't any we get an empty array
+    const userApplicationsRes = await db.query(
+      `SELECT job_id
+       FROM applications
+       WHERE username = $1`, [username]);
+
+    user.applications = userApplicationsRes.rows.map(a => a.job_id);
     return user;
   }
 
@@ -203,6 +210,56 @@ class User {
     const user = result.rows[0];
 
     if (!user) throw new NotFoundError(`No user: ${username}`);
+  }
+  
+  /** Apply to a  given job from database.
+   * If user or jobId aren't found we get NotFoundError.
+   * If user has already applied we get a  BadRequestError.
+   */
+
+  static async apply(username, jobId) {
+    const jobCheck = await db.query(
+      `SELECT id
+       FROM jobs
+       WHERE id = $1`, [jobId]);
+    const job = jobCheck.rows[0];
+
+    if (!job) throw new NotFoundError(`No job: ${jobId}`);
+
+    const userCheck = await db.query(
+      `SELECT username
+       FROM users
+       WHERE username = $1`, [username]);
+    const user = userCheck.rows[0];
+
+if (!user) throw new NotFoundError(`No username: ${username}`);
+
+    const duplicateCheck = await db.query(
+      `SELECT username, job_id
+       FROM applications
+       WHERE username = $1 AND job_id = $2`,
+    [username, jobId],
+);
+
+if (duplicateCheck.rows[0]) {
+  throw new BadRequestError(`Duplicate application: username ${username} with id ${jobId}`);
+}
+
+    const result = await db.query(
+      `INSERT INTO applications
+       (username, job_id)
+       VALUES ($1, $2)
+       RETURNING username, job_id AS "jobId"`,
+    [
+      username,
+      jobId
+    ],
+);
+    const userJob = result.rows[0];
+
+    if (!user) throw new NotFoundError(`No user or job with username: ${username} id: ${jobId}`);
+
+    return userJob;
   }
 }
 
